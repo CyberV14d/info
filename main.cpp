@@ -7,7 +7,7 @@ using namespace std;
 struct Part {
     int id;
     int nr;
-    string dir;      
+    string dir;
     float lungime;
     float angle;
     float vmedie; // average speed in km/h
@@ -111,10 +111,10 @@ float calcLapTime(const Masina &m, const Circuit &c) {
 
         if (c.parts[i].dir == "S") {
             // More downforce slows the car on straights
-            speed -= m.totPctDf * 0.5; 
+            speed -= m.totPctDf * 1.5;
         } else {
             // More downforce improves cornering speed
-            speed += m.totPctDf * 0.7; 
+            speed += m.totPctDf * 1.7;
         }
 
         if (speed < 1) speed = 1; // avoid zero or negative speed
