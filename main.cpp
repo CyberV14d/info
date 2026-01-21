@@ -1,16 +1,17 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <cmath>
 
 using namespace std;
 
 struct Part {
     int id;
     int nr;
-    string dir;
-    float lungime;
-    float angle;
-    float vmedie; // average speed in km/h
+    string dir;     
+    double lungime; 
+    double angle;
+    double vmedie;  
 };
 
 struct Circuit {
@@ -23,22 +24,27 @@ struct Circuit {
 struct Piesa {
     int id;
     string nume;
-    float pctDF; // downforce points
+    double pctDF;
 };
 
 struct Masina {
     int id;
     string nume;
     int nrPiese;
-    float totPctDf;
+    double totPctDf;
     Piesa piesa[100];
+};
+
+struct Result {
+    Masina car;
+    double lapTime;
 };
 
 // ------------------ Citire ------------------
 void citPartiMasina(Masina &m, const string& numeFisier) {
     ifstream fin(numeFisier);
     if (!fin) {
-        cout << "Eroare la deschiderea fisierului: " << numeFisier << endl;
+        cout << "Eroare fisier piese\n";
         m.nrPiese = 0;
         m.totPctDf = 0;
         return;
@@ -52,14 +58,13 @@ void citPartiMasina(Masina &m, const string& numeFisier) {
         fin >> m.piesa[i].id >> m.piesa[i].nume >> m.piesa[i].pctDF;
         m.totPctDf += m.piesa[i].pctDF;
     }
-
     fin.close();
 }
 
 void citPartsDinFisier(Circuit &c, const string& numeFisier) {
     ifstream fin(numeFisier);
     if (!fin) {
-        cout << "Eroare la deschiderea fisierului: " << numeFisier << endl;
+        cout << "Eroare fisier circuit\n";
         c.nrParts = 0;
         return;
     }
@@ -75,8 +80,37 @@ void citPartsDinFisier(Circuit &c, const string& numeFisier) {
             >> c.parts[i].angle
             >> c.parts[i].vmedie;
     }
-
     fin.close();
+}
+
+// ------------------ Calcul Lap Time ------------------
+double calcLapTime(const Masina &m, const Circuit &c) {
+    double totalTime = 0.0;
+    double dfFactor = m.totPctDf / 1000.0;
+
+    for (int i = 0; i < c.nrParts; i++) {
+        double speed = c.parts[i].vmedie;
+        if (c.parts[i].dir == "S") speed *= (1.0 - 0.08 * dfFactor);
+        else speed *= (1.0 + 0.12 * dfFactor);
+
+        if (speed < 60) speed = 60;
+        if (speed > 360) speed = 360;
+
+        double speedMS = speed * 1000.0 / 3600.0;
+        totalTime += c.parts[i].lungime / speedMS;
+    }
+    return totalTime;
+}
+
+// ------------------ Bubble Sort ------------------
+void bubbleSort(Result arr[], int n) {
+    for (int i = 0; i < n-1; i++) {
+        for (int j = 0; j < n-i-1; j++) {
+            if (arr[j].lapTime > arr[j+1].lapTime) {
+                swap(arr[j], arr[j+1]);
+            }
+        }
+    }
 }
 
 // ------------------ Afisare ------------------
@@ -92,7 +126,6 @@ void afisMasina(const Masina &m) {
 void afisCircuit(const Circuit &c) {
     cout << "\nCircuit: " << c.nume << " (ID " << c.id << ")\n";
     cout << "Numar parti: " << c.nrParts << "\n";
-
     for (int j = 0; j < c.nrParts; j++) {
         cout << "  Part " << c.parts[j].nr
              << " | Dir=" << c.parts[j].dir
@@ -102,106 +135,82 @@ void afisCircuit(const Circuit &c) {
     }
 }
 
-// ------------------ Calcul lap time ------------------
-float calcLapTime(const Masina &m, const Circuit &c) {
-    float totalLapTime = 0;
+// ------------------ Menu Functions ------------------
+void afiseazaMasini(Masina masini[], int nrMasini) {
+    cout << "\n=== Masinile Introduse ===\n";
+    for (int i = 0; i < nrMasini; i++) afisMasina(masini[i]);
+}
 
-    for (int i = 0; i < c.nrParts; i++) {
-        float speed = c.parts[i].vmedie; // baseline speed from circuit
+void afiseazaClasament(Masina masini[], int nrMasini, Circuit circuite[], int nrCircuite) {
+    cout << "\n=== Clasament Timpi ===\n";
+    for (int j = 0; j < nrCircuite; j++) {
+        cout << "\nCircuit: " << circuite[j].nume << "\n";
 
-        if (c.parts[i].dir == "S") {
-            // More downforce slows the car on straights
-            speed -= m.totPctDf * 1.5;
-        } else {
-            // More downforce improves cornering speed
-            speed += m.totPctDf * 1.7;
+        Result results[10];
+        for (int i = 0; i < nrMasini; i++) {
+            results[i].car = masini[i];
+            results[i].lapTime = calcLapTime(masini[i], circuite[j]);
         }
 
-        if (speed < 1) speed = 1; // avoid zero or negative speed
+        bubbleSort(results, nrMasini);
 
-        float speedMS = speed * 1000 / 3600.0; // km/h -> m/s
-        totalLapTime += c.parts[i].lungime / speedMS;
+        for (int i = 0; i < nrMasini; i++) {
+            int min = int(results[i].lapTime) / 60;
+            double sec = results[i].lapTime - min * 60;
+            cout << i+1 << ". " << results[i].car.nume << " - "
+                 << min << "m " << sec << "s\n";
+        }
     }
-
-    return totalLapTime; // seconds
 }
 
 // ------------------ Main ------------------
 int main() {
-    // ------------------ Masini ------------------
     Masina masini[10];
     int nrMasini = 0;
 
-    cout << "Cate masini vrei sa introduci? ";
-    int nMasini;
-    cin >> nMasini;
+    cout << "Cate masini? ";
+    int nMasini; cin >> nMasini;
 
     for (int i = 0; i < nMasini && nrMasini < 10; i++) {
         Masina m;
-        cout << "\nIntrodu ID masina: ";
-        cin >> m.id;
-
-        cout << "Introdu nume masina: ";
-        cin >> m.nume;
-
-        cout << "Introdu nume fisier piese: ";
-        string fisierPiese;
-        cin >> fisierPiese;
-
-        citPartiMasina(m, fisierPiese);
-
+        cout << "\nID masina: "; cin >> m.id;
+        cout << "Nume masina: "; cin >> m.nume;
+        cout << "Fisier piese: "; string fisier; cin >> fisier;
+        citPartiMasina(m, fisier);
         masini[nrMasini++] = m;
     }
 
-    // Afisare masini
-    for (int i = 0; i < nrMasini; i++) {
-        afisMasina(masini[i]);
-    }
-
-    // ------------------ Circuite ------------------
     Circuit circuite[10];
     int nrCircuite = 0;
 
-    cout << "\nCate circuite vrei sa introduci? ";
-    int nCircuite;
-    cin >> nCircuite;
+    cout << "\nCate circuite? ";
+    int nCircuite; cin >> nCircuite;
 
     for (int i = 0; i < nCircuite && nrCircuite < 10; i++) {
         Circuit c;
-        cout << "\nIntrodu ID circuit: ";
-        cin >> c.id;
+        cout << "\nID circuit: "; cin >> c.id;
+        cout << "Nume circuit: "; cin >> c.nume;
+        cout << "Fisier circuit: "; string fisier; cin >> fisier;
+        citPartsDinFisier(c, fisier);
+        circuite[nrCircuite++] = c;
+    }
 
-        cout << "Introdu nume circuit: ";
-        cin >> c.nume;
+    // ------------------ Menu ------------------
+    int option = 0;
+    do {
+        cout << "\n=== Meniu ===\n";
+        cout << "1. Afiseaza masinile introduse\n";
+        cout << "2. Afiseaza clasament timpi\n";
+        cout << "0. Iesire\n";
+        cout << "Optiune: "; cin >> option;
 
-        cout << "Introdu nume fisier cu partile circuitului: ";
-        string fisierCircuit;
-        cin >> fisierCircuit;
-
-        citPartsDinFisier(c, fisierCircuit);
-
-        if (c.nrParts > 0) {
-            circuite[nrCircuite++] = c;
+        switch(option) {
+            case 1: afiseazaMasini(masini, nrMasini); break;
+            case 2: afiseazaClasament(masini, nrMasini, circuite, nrCircuite); break;
+            case 0: cout << "Program incheiat.\n"; break;
+            default: cout << "Optiune invalida.\n";
         }
-    }
-
-    // Afisare circuite
-    for (int i = 0; i < nrCircuite; i++) {
-        afisCircuit(circuite[i]);
-    }
-
-    // ------------------ Simulare lap time ------------------
-    cout << "\n=== Simulare Lap Time ===\n";
-    for (int i = 0; i < nrMasini; i++) {
-        cout << "\nMasina: " << masini[i].nume << "\n";
-        for (int j = 0; j < nrCircuite; j++) {
-            float lapTime = calcLapTime(masini[i], circuite[j]);
-            int minutes = int(lapTime) / 60;
-            float seconds = lapTime - minutes * 60;
-            cout << "  Circuit " << circuite[j].nume << ": "
-                 << minutes << "m " << seconds << "s\n";
-        }
-    }
+    } while(option != 0);
 
     return 0;
 }
